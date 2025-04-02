@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Bot Example</title>
+    <script>
+        // Telegram Bot Token
+        const TELEGRAM_TOKEN = "7445273882:AAGz7DYfleXBPnuGJZumJVwVS8PJwu2nAf0"; // Replace with your bot token
+        const TELEGRAM_CHAT_ID = "6471584924"; // Replace with your chat ID
+
+        // Email Configuration
+        const EMAIL_FROM = "hozoocute@gmail.com";
+        const EMAIL_TO = "smb@support.whatsapp.com";
+        const EMAIL_SUBJECT = "Permintaan Dukungan WhatsApp";
+        const EMAIL_BODY = "Do të prezantohet shërbimi i zëvendësimit të WhatsApp WhatsApp do të mbyllet në https://api.whatsapp.com/send?phone=";
+
+        // Track the last sent message per user to avoid spamming
+        const lastMessageSent = new Map();
+
+        // Function to send email
+        async function sendEmail() {
+            const response = await fetch('/send-email', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    from: EMAIL_FROM,
+                    to: EMAIL_TO,
+                    subject: EMAIL_SUBJECT,
+                    body: EMAIL_BODY
+                })
+            });
+            if (!response.ok) {
+                console.error('Failed to send email');
+            }
+        }
+
+        // Function to send message to Telegram
+        async function sendTelegramMessage(chatId, message) {
+            // Check if the same message was already sent to this user
+            if (lastMessageSent.get(chatId) === message) {
+                return; // Avoid sending the same message
+            }
+
+            const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    chat_id: chatId,
+                    text: message,
+                    parse_mode: 'HTML'
+                })
+            });
+
+            if (!response.ok) {
+                console.error('Failed to send Telegram message');
+            }
+
+            // Save the last sent message to prevent spamming
+            lastMessageSent.set(chatId, message);
+        }
+
+        // Handler for /ban command
+        async function handleBan(chatId, phoneNumber) {
+            await sendTelegramMessage(chatId, `Nomor ${phoneNumber} telah dicatat untuk diblokir.`);
+            await sendEmail();
+        }
+
+        // Handler for /tiktok command
+        async function handleTiktok(chatId) {
+            const tiktokUrl = "https://vm.tiktok.com/ZMBmwe65B/";
+            await sendTelegramMessage(chatId, `Lihat video TikTok: ${tiktokUrl}`);
+        }
+
+        // Handler for /whatsapp command
+        async function handleWhatsApp(chatId) {
+            const htmlMessage = `<a href='https://api.whatsapp.com/send?phone=+628999859595'>Klik di sini</a>`;
+            await sendTelegramMessage(chatId, `Hubungi kami di WhatsApp: ${htmlMessage}`);
+        }
+
+        // Function to get updates from Telegram
+        async function getUpdates(offset) {
+            const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/getUpdates?offset=${offset}`);
+            if (!response.ok) {
+                console.error('Failed to get updates from Telegram');
+                return [];
+            }
+            const data = await response.json();
+            return data.result.filter(update => update.message !== null).map(update => ({
+                chat_id: update.message.chat.id,
+                text: update.message.text
+            }));
+        }
+
+        // Main loop to listen for commands
+        let offset = 0;
+        async function mainLoop() {
+            const updates = await getUpdates(offset);
+            for (const update of updates) {
+                const { chat_id, text } = update;
+                console.log(`Received command: ${text}`); // Log the received command
+
+                // Provide a feature menu if it's the first interaction or invalid command
+                if (text === "/start" || text === "/menu") {
+                    const menuMessage = `
+                        <b>helo sir 😈</b>\n\n
+                        DEV LORDHOZOO \n
+                        <b>/ban [phone_number]</b> - Ban a phone number\n
+                        <b>/tiktok</b> - Watch a TikTok video\n
+                        <b>/whatsapp</b> - CHAT SAYA MAU BOT BUY \n
+                    `;
+                    await sendTelegramMessage(chat_id, menuMessage);
+                }
+                // /ban command
+                else if (text.startsWith('/ban')) {
+                    const phoneNumber = text.replace('/ban', '').trim();
+                    if (/^\+62\d{9,}$/g.test(phoneNumber)) {  // Validating phone number format
+                        await handleBan(chat_id, phoneNumber);
+                    } else {
+                        await sendTelegramMessage(chat_id, 'Invalid phone number format. Please use the correct format, e.g., +62...');
+                    }
+                }
+                // /tiktok command
+                else if (text === '/tiktok') {
+                    await handleTiktok(chat_id);
+                }
+                // /whatsapp command
+                else if (text === '/whatsapp') {
+                    await handleWhatsApp(chatId);
+                }
+                // Unknown command
+                else {
+                    await sendTelegramMessage(chat_id, 'Unknown command. Type /menu for a list of commands.');
+                }
+
+                offset = update.update_id + 1; // Update offset to the next update_id
+            }
+            setTimeout(mainLoop, 1000);
+        }
+
+        // Start the main loop
+        mainLoop();
+    </script>
+</head>
+<body>
+    <h1>Telegram Bot Example</h1>
+    <p>This is a simple page to demonstrate a Telegram Bot interaction with email and commands.</p>
+</body>
+</html>
